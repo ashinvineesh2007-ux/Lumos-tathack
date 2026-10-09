@@ -15,7 +15,7 @@
 pip install -r requirements.txt
 ```
 
-### Run Automated Tests (104 Tests)
+### Run Automated Tests (113 Tests)
 ```powershell
 python -m pytest -v
 ```
@@ -37,7 +37,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | `GET` | `/api/identities` | Public | Simulated personas for frontend role dropdowns and auditor test harnesses. |
 | `POST` | `/query` | Validated Identity | Primary RAG execution endpoint supporting `baseline` and `protected` modes. |
 | `GET` | `/audit/logs` | **ADMIN Only** (Clearance 3) | Structured audit events stream with multi-field filtering. |
-| `DELETE`| `/audit/logs` | **ADMIN Only** (Clearance 3) | Reset/clear in-memory audit logs between test runs. |
+| `DELETE`| `/audit/logs` | **ADMIN Only** (Clearance 3) | Clear in-memory query audit logs and record purge metadata. |
 
 ---
 
@@ -112,6 +112,8 @@ Use this endpoint to populate the User Persona dropdown on the UI:
 | `user_id` | Role | Clearance Tier | Name & Department |
 | :--- | :---: | :---: | :--- |
 | `ext_guest` | `GUEST` | 1 | External Guest Visitor |
+| `guest_anon` | `GUEST` | 1 | Anonymous External Guest |
+| `guest` | `GUEST` | 1 | Guest Visitor |
 | `emp_alice` | `EMPLOYEE` | 2 | Alice Smith (Engineering) |
 | `emp_bob` | `EMPLOYEE` | 2 | Bob Jones (Procurement) |
 | `mgr_bob` | `MANAGER` | 2 | Bob Martinez (Operations) |
@@ -132,6 +134,11 @@ Use this endpoint to populate the User Persona dropdown on the UI:
   "top_k": 5
 }
 ```
+*Field constraints:*
+- `user_id`: String, length 1–64 characters. Resolved against server-side directory.
+- `query`: String, length 3–4096 characters. Guarded against payload DoS.
+- `mode`: `"baseline"` or `"protected"` (default: `"protected"`).
+- `top_k`: Integer between 1 and 20 (default: 5).
 
 #### Protected Mode Response (Secure Denial — Zero Leakage):
 ```json
@@ -208,10 +215,11 @@ Calls to `/audit/logs` **must** provide an Administrator identity via either:
 If called by a non-administrator (e.g., `emp_alice`, `ext_guest`) or an unauthenticated caller, the API returns **HTTP 403 Forbidden**.
 
 #### Query Filters:
-- `user_id`: Filter events by queried user.
-- `request_id`: Filter by request UUID.
+- `caller_id`: Admin caller identity (max 64 chars).
+- `user_id`: Filter events by queried user (max 64 chars).
+- `request_id`: Filter by request UUID (max 64 chars).
 - `decision`: `ALLOW` or `DENY`.
-- `doc_id`: Target document ID (e.g. `DOC-010`).
+- `doc_id`: Target document ID (e.g. `DOC-010`, max 64 chars).
 - `limit`: Integer between 1 and 1000 (default: 100).
 
 #### Response (200 OK):
@@ -235,6 +243,23 @@ If called by a non-administrator (e.g., `emp_alice`, `ext_guest`) or an unauthen
     "content_exposed": false
   }
 ]
+```
+
+---
+
+### G. Clear Audit Logs (`DELETE /audit/logs`)
+
+#### Access Control Rule:
+Calls to `DELETE /audit/logs` **must** provide an Administrator identity via `?caller_id=adm_charlie` or `X-User-Id: adm_charlie`. Non-administrators receive **HTTP 403 Forbidden**.
+
+#### Response (200 OK):
+```json
+{
+  "status": "success",
+  "message": "Audit logs cleared.",
+  "events_purged": 12,
+  "purged_by": "adm_charlie"
+}
 ```
 
 ---
@@ -264,6 +289,13 @@ If called by a non-administrator (e.g., `emp_alice`, `ext_guest`) or an unauthen
 
 ## 5. Security Architecture & Hackathon Limitations
 
-1. **Simulated IAM Authentication:** Identities are resolved server-side through fixed simulated directories (`USER_DIRECTORY`). This demonstrates deterministic server-side role resolution without requiring external OAuth/OIDC infrastructure during the 30-hour hackathon.
-2. **In-Memory Audit Buffer:** The audit trail uses a thread-safe in-memory circular buffer (`AuditLogger`). In a production setting, this would be backed by persistent append-only storage (e.g. SQLite, PostgreSQL, or Kafka).
-3. **Fail-Closed Guarantee:** Any unexpected exception during query parsing or authorization evaluation immediately fails closed, returning safe refusals and zero context chunks.
+1. **Simulated IAM Authentication vs. Production Authentication Boundary:**
+   - *Current State:* Identities are client-selected and resolved server-side through a simulated enterprise directory (`USER_DIRECTORY`). This demonstrates deterministic server-side role resolution without requiring external IdP infrastructure during the hackathon.
+   - *Security Limitation:* A client can supply `admin_dave` or `adm_charlie` to access privileged audit endpoints.
+   - *Production Recommendation:* Replace simulated string identifiers with cryptographically signed JSON Web Tokens (JWT) issued by an OAuth 2.0 / OpenID Connect provider (e.g., Okta, Auth0, Keycloak). The API gateway or FastAPI `HTTPBearer` dependency must verify token signature, expiration (`exp`), and audience (`aud`) claims before extracting claims into `UserContext`.
+2. **In-Memory Audit Buffer:**
+   - *Current State:* The audit trail uses a thread-safe in-memory buffer (`AuditLogger`) with purge tracking.
+   - *Security Limitation:* Ephemeral logs are lost on process restarts and not shared across multi-worker uvicorn processes.
+   - *Production Recommendation:* Back the audit logger with an immutable, append-only durable datastore (e.g., PostgreSQL with Timescale, DynamoDB with Streams, or Kafka with WORM retention).
+3. **Fail-Closed Guarantee:**
+   - Any unexpected exception during query parsing or authorization evaluation immediately fails closed, returning safe refusals and zero context chunks.

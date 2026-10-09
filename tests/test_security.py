@@ -122,6 +122,37 @@ class TestAuthorizationEvaluation:
         finally:
             DOCUMENT_ACLS.pop("DOC-EXCLUSIVE", None)
 
+    def test_department_match_acl_allows_matching_department(self):
+        alice = resolve_user_context("emp_alice")
+        custom_acl = DocumentACL(
+            doc_id="DOC-ENG-ONLY",
+            min_clearance=2,
+            require_department_match="Engineering",
+        )
+        DOCUMENT_ACLS["DOC-ENG-ONLY"] = custom_acl
+        try:
+            decision, reason = evaluate_document_access(alice, "DOC-ENG-ONLY", AccessLevel.INTERNAL)
+            assert decision == AuthDecision.ALLOW
+            assert "Allow" in reason
+        finally:
+            DOCUMENT_ACLS.pop("DOC-ENG-ONLY", None)
+
+    def test_department_match_acl_denies_mismatched_department(self):
+        bob = resolve_user_context("emp_bob")
+        custom_acl = DocumentACL(
+            doc_id="DOC-ENG-ONLY",
+            min_clearance=2,
+            require_department_match="Engineering",
+        )
+        DOCUMENT_ACLS["DOC-ENG-ONLY"] = custom_acl
+        try:
+            decision, reason = evaluate_document_access(bob, "DOC-ENG-ONLY", AccessLevel.INTERNAL)
+            assert decision == AuthDecision.DENY
+            assert "Restrictive ACL requires department 'Engineering'" in reason
+            assert "Procurement" in reason
+        finally:
+            DOCUMENT_ACLS.pop("DOC-ENG-ONLY", None)
+
 
 class TestFailClosedGuarantees:
     """Verify strict fail-closed behavior on missing or invalid inputs."""
@@ -234,3 +265,36 @@ class TestAuditLogger:
         assert events[0].user_id == "emp_alice"
         assert events[0].decision == AuthDecision.DENY
         assert events[0].content_exposed is False
+
+    def test_audit_logger_clear_records_purge_history(self):
+        logger = get_audit_logger()
+        logger.clear()
+
+        event = AuditEvent(
+            user_id="emp_alice",
+            user_role=UserRole.EMPLOYEE,
+            user_clearance=2,
+            request_id="req-999",
+            query_text="test query",
+            mode=SystemMode.PROTECTED,
+            doc_id="DOC-001",
+            doc_title="Overview",
+            doc_access_level=AccessLevel.PUBLIC,
+            similarity_score=0.85,
+            decision=AuthDecision.ALLOW,
+            policy_reason="Allowed",
+            content_exposed=True,
+        )
+        logger.record_event(event)
+        assert len(logger) == 1
+
+        purged_count = logger.clear(purged_by="adm_charlie")
+        assert purged_count == 1
+        assert len(logger) == 0
+
+        history = logger.get_purge_history()
+        assert len(history) >= 1
+        last_purge = history[-1]
+        assert last_purge["purged_by"] == "adm_charlie"
+        assert last_purge["events_purged"] == 1
+        assert "timestamp" in last_purge

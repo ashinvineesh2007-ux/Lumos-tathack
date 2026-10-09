@@ -81,7 +81,7 @@ pip install -r requirements.txt
 ```
 
 ### 2. Run Tests
-Verify all 89 unit, security, and integration tests:
+Verify all 113 unit, security, and integration tests:
 ```powershell
 python -m pytest -v
 ```
@@ -97,8 +97,9 @@ API Documentation will be live at:
 ---
 
 ## 📊 Verification & Test Results
-- **89 Passed Tests** (100% pass rate)
+- **113 Passed Tests** (100% pass rate)
   - `tests/test_data_store.py`: 54 tests (Corpus structure, search ordering, TF-IDF fallback, security boundaries, Step 1 regression)
-  - `tests/test_security.py`: 21 tests (Identity resolution, clearance tiers, restrictive ACLs, fail-closed enforcement, audit logging)
-  - `tests/test_rag_pipeline.py`: 5 tests (Baseline vs. Protected side-by-side leakage test, admin authorized access, indirect prompt injection defense)
-  - `tests/test_api.py`: 9 tests (FastAPI `/query`, `/health`, `/audit/logs`, `/api/identities`, `/api/documents`)
+  - `tests/test_security.py`: 24 tests (Identity resolution, clearance tiers, restrictive ACLs, department matching, fail-closed enforcement, audit logging & purge tracking)
+  - `tests/test_rag_engine.py`: 13 tests (Dual-mode execution, protected isolation, authorized INJ-001 isolation, audit distinction, offline execution)
+  - `tests/test_rag_pipeline.py`: 5 tests (Baseline vs. Protected side-by-side leakage benchmark, admin authorized access, indirect prompt injection defense)
+  - `tests/test_api.py`: 17 tests (FastAPI `/query`, `/health`, `/config`, `/audit/logs`, `/audit/logs` DELETE, input length validation, ACL isolation)

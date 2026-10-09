@@ -16,9 +16,10 @@ Key Principles:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 from threading import Lock
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 class UserContext(BaseModel):
     """Server-resolved user identity context."""
-    user_id: str = Field(..., description="Unique user identifier (normalized lowercase)")
+    user_id: str = Field(..., max_length=64, description="Unique user identifier (normalized lowercase)")
     name: str = Field(..., description="Full employee name")
     role: UserRole = Field(..., description="Assigned role from trusted registry")
     clearance: int = Field(..., description="Clearance level: 1 (Public), 2 (Internal), 3 (Confidential)")
@@ -288,6 +289,15 @@ def evaluate_document_access(
                 f"user role is {user.role.value}.",
             )
 
+        # Restrictive department ACL: if specified, user department MUST match
+        if acl.require_department_match is not None:
+            if not user.department or user.department.strip().lower() != acl.require_department_match.strip().lower():
+                return (
+                    AuthDecision.DENY,
+                    f"Deny: Restrictive ACL requires department '{acl.require_department_match}'; "
+                    f"user '{user.user_id}' department is '{user.department}'.",
+                )
+
     return (
         AuthDecision.ALLOW,
         f"Allow: User '{user.user_id}' meets {lvl.value} clearance requirement and ACL checks.",
@@ -353,6 +363,7 @@ class AuditLogger:
 
     def __init__(self) -> None:
         self._events: List[AuditEvent] = []
+        self._purge_history: List[Dict[str, Any]] = []
         self._lock = Lock()
 
     def record_event(self, event: AuditEvent) -> None:
@@ -386,9 +397,25 @@ class AuditLogger:
 
         return filtered[-limit:]
 
-    def clear(self) -> None:
+    def clear(self, purged_by: Optional[str] = None) -> int:
+        """
+        Clear in-memory query audit events while appending an entry to purge history.
+        Returns the number of purged events.
+        """
         with self._lock:
+            count = len(self._events)
             self._events.clear()
+            self._purge_history.append({
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "purged_by": purged_by or "system",
+                "events_purged": count,
+            })
+            return count
+
+    def get_purge_history(self) -> List[Dict[str, Any]]:
+        """Retrieve recorded log purge history."""
+        with self._lock:
+            return list(self._purge_history)
 
     def __len__(self) -> int:
         with self._lock:

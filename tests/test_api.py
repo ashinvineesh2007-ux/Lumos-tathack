@@ -221,3 +221,92 @@ class TestAuditLogAccessControl:
         assert "Traceback" not in body
         assert "C:\\" not in body
         assert "/app/" not in body
+
+    # 13. Oversized query and identity strings rejected with 422 (DoS Prevention)
+    def test_oversized_query_and_user_id_rejected_with_422(self, client):
+        # Oversized query (> 4096 chars)
+        res_query = client.post(
+            "/query",
+            json={"user_id": "emp_alice", "query": "a" * 4097, "mode": "protected"},
+        )
+        assert res_query.status_code == 422
+
+        # Oversized user_id (> 64 chars)
+        res_user = client.post(
+            "/query",
+            json={"user_id": "u" * 65, "query": "valid query text", "mode": "protected"},
+        )
+        assert res_user.status_code == 422
+
+    # 14. DELETE /audit/logs access control enforced (403 Forbidden for non-admins)
+    def test_delete_audit_logs_unauthorized_returns_403(self, client):
+        # Anonymous caller
+        anon_res = client.delete("/audit/logs")
+        assert anon_res.status_code == 403
+
+        # Non-admin employee
+        emp_res = client.delete("/audit/logs?caller_id=emp_alice")
+        assert emp_res.status_code == 403
+
+        # Non-admin via header
+        hdr_res = client.delete("/audit/logs", headers={"X-User-Id": "ext_guest"})
+        assert hdr_res.status_code == 403
+
+    # 15. DELETE /audit/logs authorized admin succeeds and records purge event
+    def test_delete_audit_logs_authorized_admin_succeeds(self, client):
+        # Generate an audit event first
+        client.post(
+            "/query",
+            json={"user_id": "emp_alice", "query": "company overview", "mode": "protected"},
+        )
+
+        # Admin purges audit logs
+        del_res = client.delete("/audit/logs?caller_id=adm_charlie")
+        assert del_res.status_code == 200
+        del_data = del_res.json()
+        assert del_data["status"] == "success"
+        assert "Audit logs cleared." in del_data["message"]
+        assert del_data["purged_by"] == "adm_charlie"
+
+        # Subsequent query returns zero logs
+        logs_res = client.get("/audit/logs?caller_id=adm_charlie")
+        assert logs_res.status_code == 200
+        assert len(logs_res.json()) == 0
+
+    # 16. End-to-end document ACL denial and protected context isolation
+    def test_end_to_end_document_acl_denial_and_context_isolation(self, client):
+        # Alice is EMPLOYEE (clearance 2). DOC-012 restricts access to admin_dave, adm_charlie, mgr_carol
+        res = client.post(
+            "/query",
+            json={
+                "user_id": "emp_alice",
+                "query": "HR confidential employee disciplinary cases summary",
+                "mode": "protected",
+                "top_k": 5,
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+
+        # Find DOC-012 in auth decisions
+        doc12 = [d for d in data["auth_decisions"] if d["doc_id"] == "DOC-012"]
+        if doc12:
+            assert doc12[0]["decision"] == "DENY"
+            assert doc12[0]["content_snippet"] is None
+            assert "Restrictive ACL requires user membership" in doc12[0]["policy_reason"]
+
+        # Ensure no disciplinary case content entered context_sent or answer
+        for chunk in data["context_sent"]:
+            assert "HR-2025" not in chunk
+            assert "DOC-012" not in chunk
+        assert "HR-2025" not in data["answer"]
+
+    # 17. Simulated identity resolution boundary: known vs unknown admin
+    def test_simulated_identity_boundary_known_vs_unknown_admin(self, client):
+        # Known simulated admin
+        known_res = client.get("/audit/logs?caller_id=admin_dave")
+        assert known_res.status_code == 200
+
+        # Non-existent forged admin identity fails closed
+        forged_res = client.get("/audit/logs?caller_id=forged_superadmin")
+        assert forged_res.status_code == 403

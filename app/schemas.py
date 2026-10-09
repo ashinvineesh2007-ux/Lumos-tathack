@@ -90,8 +90,8 @@ class QueryRequest(BaseModel):
     The `user_id` maps to the static clearance matrix defined in security.py.
     The `mode` selects baseline (leaky demo) vs protected (secure) execution.
     """
-    user_id  : str        = Field(...,  description="User identifier (e.g. 'emp_alice')", min_length=1)
-    query    : str        = Field(...,  description="Natural-language question to the RAG assistant", min_length=3)
+    user_id  : str        = Field(...,  description="User identifier (e.g. 'emp_alice')", min_length=1, max_length=64)
+    query    : str        = Field(...,  description="Natural-language question to the RAG assistant", min_length=3, max_length=4096)
     mode     : SystemMode = Field(
         default=SystemMode.PROTECTED,
         description="'baseline' leaks all chunks; 'protected' enforces RBAC"
