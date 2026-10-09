@@ -3,7 +3,7 @@ app/main.py — FastAPI Application & Teammate Integration API
 
 Provides endpoints for:
 - Person 1 (Frontend & Dashboard): /health, /config, /config/documents, /query, /api/identities
-- Person 3 (AI Security Auditor): /query (baseline vs protected), /audit/logs, /audit/logs/clear
+- Person 3 (AI Security Auditor): /query (baseline vs protected), GET /audit/logs, DELETE /audit/logs
 """
 
 from __future__ import annotations
@@ -178,12 +178,12 @@ def query_rag(request: QueryRequest) -> QueryResponse:
 
 @app.get("/audit/logs", response_model=List[AuditEvent], tags=["Audit"])
 def get_audit_logs(
-    caller_id: Optional[str] = Query(None, description="Simulated user ID requesting audit log access"),
-    x_user_id: Optional[str] = Header(None, alias="X-User-Id", description="User ID in HTTP header"),
-    user_id: Optional[str] = Query(None, description="Filter audit events by target user ID"),
-    request_id: Optional[str] = Query(None, description="Filter by request ID"),
+    caller_id: Optional[str] = Query(None, max_length=64, description="Simulated user ID requesting audit log access"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id", max_length=64, description="User ID in HTTP header"),
+    user_id: Optional[str] = Query(None, max_length=64, description="Filter audit events by target user ID"),
+    request_id: Optional[str] = Query(None, max_length=64, description="Filter by request ID"),
     decision: Optional[AuthDecision] = Query(None, description="Filter by ALLOW or DENY"),
-    doc_id: Optional[str] = Query(None, description="Filter by document ID"),
+    doc_id: Optional[str] = Query(None, max_length=64, description="Filter by document ID"),
     limit: int = Query(100, ge=1, le=1000, description="Max records to return"),
 ) -> List[AuditEvent]:
     """
@@ -214,11 +214,12 @@ def get_audit_logs(
 
 @app.delete("/audit/logs", tags=["Audit"])
 def clear_audit_logs(
-    caller_id: Optional[str] = Query(None, description="Simulated user ID requesting audit log reset"),
-    x_user_id: Optional[str] = Header(None, alias="X-User-Id", description="User ID in HTTP header"),
-) -> Dict[str, str]:
+    caller_id: Optional[str] = Query(None, max_length=64, description="Simulated user ID requesting audit log reset"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id", max_length=64, description="User ID in HTTP header"),
+) -> Dict[str, Any]:
     """
     Clear in-memory audit logs (restricted to Administrator callers).
+    Records the purge event in audit logger purge history.
     """
     effective_caller = caller_id or x_user_id
     caller = resolve_user_context(effective_caller)
@@ -230,8 +231,13 @@ def clear_audit_logs(
         )
 
     audit_logger = get_audit_logger()
-    audit_logger.clear()
-    return {"status": "success", "message": "Audit logs cleared."}
+    count = audit_logger.clear(purged_by=caller.user_id)
+    return {
+        "status": "success",
+        "message": "Audit logs cleared.",
+        "events_purged": count,
+        "purged_by": caller.user_id,
+    }
 
 
 @app.get("/api/identities", response_model=List[UserIdentitySummary], tags=["Metadata"])

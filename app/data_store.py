@@ -6,7 +6,7 @@ Purpose
 -------
 Provides two things:
 
-1. ``KNOWLEDGE_BASE`` — A deterministic list of 14 synthetic ``KnowledgeDocument``
+1. ``KNOWLEDGE_BASE`` — A deterministic list of 15 synthetic ``KnowledgeDocument``
    objects spanning three clearance tiers (PUBLIC / INTERNAL / CONFIDENTIAL) and
    five business domains (Finance, HR, Product, Engineering, Vendor/Procurement).
 
@@ -121,13 +121,13 @@ class KnowledgeDocument(BaseModel):
 
 
 # ===========================================================================
-# Synthetic Knowledge Base  (14 documents — deterministic, fictional)
+# Synthetic Knowledge Base  (15 documents — deterministic, fictional)
 # ===========================================================================
 #
 # Distribution:
 #   PUBLIC       : 4 documents (DOC-001 ... DOC-004)
-#   INTERNAL     : 5 documents (DOC-005 ... DOC-009)
-#   CONFIDENTIAL : 5 documents (DOC-010 ... DOC-014, includes 2 injection tests)
+#   INTERNAL     : 7 documents (DOC-005 ... DOC-009, INJ-001, INJ-002)
+#   CONFIDENTIAL : 4 documents (DOC-010 ... DOC-013)
 #
 # Business domains covered:
 #   Finance / Payroll   : DOC-003, DOC-010, DOC-011

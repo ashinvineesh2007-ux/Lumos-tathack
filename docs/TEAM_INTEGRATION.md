@@ -24,7 +24,7 @@ Interactive Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 Alternative ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
 ### 1.3 Running the Test Suite
-Execute the entire test suite (89 unit, security, and regression tests):
+Execute the entire test suite (113 unit, security, and regression tests):
 ```powershell
 python -m pytest -v
 ```
@@ -40,10 +40,14 @@ Use this endpoint to populate the User Persona / Role selector dropdown on the U
 
 | `user_id` | Name | Role | Clearance | Department |
 | :--- | :--- | :--- | :---: | :--- |
+| `ext_guest` | External Guest Visitor | `GUEST` | 1 | External |
 | `guest_anon` | Anonymous External Guest | `GUEST` | 1 | External |
+| `guest` | Guest Visitor | `GUEST` | 1 | External |
 | `emp_alice` | Alice Smith | `EMPLOYEE` | 2 | Engineering |
 | `emp_bob` | Bob Jones | `EMPLOYEE` | 2 | Procurement |
+| `mgr_bob` | Bob Martinez | `MANAGER` | 2 | Operations |
 | `mgr_carol` | Carol Danvers | `MANAGER` | 2 | Human Resources |
+| `adm_charlie` | Charlie Vance | `ADMIN` | 3 | IT Security |
 | `admin_dave` | Dave Bowman | `ADMIN` | 3 | Security |
 
 ### 2.2 Query Execution Endpoint (`POST /query`)
@@ -155,13 +159,18 @@ $$\text{Context Leakage Rate} = \frac{\sum \text{Unauthorized Documents with } (
 ---
 
 ## 4. Resetting Audit State Between Test Runs
+
+Access Control: Requires Administrator identity (`?caller_id=adm_charlie` or `X-User-Id: adm_charlie`).
+
 ```http
-DELETE /audit/logs
+DELETE /audit/logs?caller_id=adm_charlie
 ```
-Returns:
+Returns (200 OK):
 ```json
 {
   "status": "success",
-  "message": "Audit logs cleared."
+  "message": "Audit logs cleared.",
+  "events_purged": 12,
+  "purged_by": "adm_charlie"
 }
 ```
