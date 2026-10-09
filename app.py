@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 # ---------------------------------------------------------
@@ -193,13 +194,214 @@ if nav_selection == "Overview":
         st.caption("All evaluation pipelines remain in standby until test data or evaluator services are connected.")
 
 elif nav_selection == "Access Control":
-    st.title("Access Control Policy Audit")
-    st.caption("Verification of document-level ACL boundaries, tenant isolation, and privilege escalation risks.")
+    st.title("Access Control & Boundary Enforcement")
+    st.caption(
+        "Audit verification of document sensitivity tiers, user-role access boundaries, and pre-retrieval authorization."
+    )
+
+    st.markdown("")
+
+    # 1. Backend Policy Engine Status & Empty State
     with st.container(border=True):
+        ac_hdr, ac_badge = st.columns([4, 1])
+        with ac_hdr:
+            st.markdown("### 🔌 Access Control Policy Engine")
+            st.caption("Active connection state to identity providers, document ACL metadata, and tenant registries.")
+        with ac_badge:
+            st.error("🔴 Disconnected", icon="🚨")
+
         st.info(
-            "No document-level permissions or Role-Based Access Control (RBAC) configurations loaded. "
-            "Connect the backend to audit document ACL boundaries, tenant isolation, and privilege escalation risks."
+            "⚠️ **Live Policy Engine Offline:** No active document repositories, access control lists (ACLs), "
+            "or directory groups are currently loaded from the backend. "
+            "The sensitivity tiers and permission matrix below define the reference security specification "
+            "used by RAGLeak to detect authorization bypasses once connected."
         )
+
+    st.markdown("")
+
+    # 2. Document Sensitivity Classifications
+    st.subheader("📑 Document Sensitivity Classifications")
+    st.caption("Standardized categorization used to partition knowledge base chunks and enforce retrieval barriers.")
+
+    sens_col1, sens_col2, sens_col3 = st.columns(3)
+
+    with sens_col1:
+        with st.container(border=True):
+            st.markdown("#### 🌐 Tier 1: Public")
+            st.caption("Universal Access • Non-Confidential")
+            st.markdown("""
+            * **Scope:** Open to all users, guests, and unauthenticated sessions.
+            * **Examples:** Public product documentation, release notes, published FAQs, marketing sheets.
+            * **Retrieval Policy:** Permitted in any query context without identity clearance.
+            * **Leakage Risk:** Minimal / Negligible.
+            """)
+            st.divider()
+            st.caption("Default classification for external knowledge.")
+
+    with sens_col2:
+        with st.container(border=True):
+            st.markdown("#### 🏢 Tier 2: Internal")
+            st.caption("Authenticated Members • Organization-Only")
+            st.markdown("""
+            * **Scope:** Restricted to verified internal personnel and operational agents.
+            * **Examples:** Engineering runbooks, architecture specs, team wiki pages, roadmap drafts.
+            * **Retrieval Policy:** Filtered to authorized employees; strictly blocked for external/guest queries.
+            * **Leakage Risk:** Moderate — proprietary business confidentiality violation.
+            """)
+            st.divider()
+            st.caption("Protected from external context injection.")
+
+    with sens_col3:
+        with st.container(border=True):
+            st.markdown("#### 🔒 Tier 3: Confidential")
+            st.caption("Restricted Roles • High-Impact Assets")
+            st.markdown("""
+            * **Scope:** Restricted to specific privileged roles (HR, Legal, Executive, Security Admins).
+            * **Examples:** Employee compensation, customer PII, API secrets, contract negotiations, audit logs.
+            * **Retrieval Policy:** Mandatory pre-retrieval role match; zero inclusion in generalized prompt contexts.
+            * **Leakage Risk:** Critical — regulatory compliance (GDPR/HIPAA) and security breach.
+            """)
+            st.divider()
+            st.caption("Strict zero-trust retrieval gate.")
+
+    st.markdown("")
+
+    # 3. User-Role & Permission Matrix
+    st.subheader("📋 Reference Role-Based Access Control (RBAC) Matrix")
+    st.caption("Decision framework for evaluating whether a retrieved chunk may be admitted to the LLM context.")
+
+    st.info(
+        "ℹ️ **Illustrative Reference Schema:** This matrix defines the reference policy model against which "
+        "RAGLeak evaluates leakage vulnerabilities. Real backend tenant policies have not been connected yet."
+    )
+
+    rbac_data = {
+        "User Role": [
+            "Guest / External User",
+            "General Employee",
+            "Security Auditor",
+            "Tenant Administrator",
+        ],
+        "Public Docs (Tier 1)": [
+            "✅ Allowed",
+            "✅ Allowed",
+            "✅ Allowed",
+            "✅ Allowed",
+        ],
+        "Internal Docs (Tier 2)": [
+            "❌ Denied",
+            "✅ Allowed",
+            "✅ Allowed",
+            "✅ Allowed",
+        ],
+        "Confidential / PII (Tier 3)": [
+            "❌ Denied",
+            "❌ Denied",
+            "🔍 Scoped Audit Only",
+            "✅ Allowed",
+        ],
+        "Context Injection Boundary": [
+            "Public Knowledge Only",
+            "Public + Internal Knowledge",
+            "Public + Internal + Audit Traces",
+            "Full Tenant Knowledge Base",
+        ],
+        "Enforcement Mode": [
+            "Pre-Retrieval Filtered",
+            "Pre-Retrieval Filtered",
+            "Strict Scoped Retrieval",
+            "Admin Policy Scoped",
+        ],
+    }
+
+    rbac_df = pd.DataFrame(rbac_data)
+    st.dataframe(rbac_df, use_container_width=True, hide_index=True)
+
+    st.markdown("")
+
+    # 4. Pre-Retrieval Authorization Flow
+    st.subheader("🛡️ Pre-Retrieval Authorization Architecture")
+    st.caption("Enforcing security boundaries prior to embedding search and context synthesis.")
+
+    flow_col1, flow_col2, flow_col3, flow_col4 = st.columns(4)
+
+    with flow_col1:
+        with st.container(border=True):
+            st.markdown("#### 1. Identity Token")
+            st.caption("Step 1 • Authentication")
+            st.markdown("""
+            User submits prompt accompanied by verified identity claims and tenant role tokens.
+            """)
+            st.divider()
+            st.caption("Identity verification")
+
+    with flow_col2:
+        with st.container(border=True):
+            st.markdown("#### 2. Pre-Filter Gate")
+            st.caption("Step 2 • Mandatory Gate")
+            st.markdown("""
+            Vector search applies metadata ACL filters **before** computing similarity scores. Unauthorized chunks are excluded.
+            """)
+            st.divider()
+            st.caption("Pre-retrieval boundary")
+
+    with flow_col3:
+        with st.container(border=True):
+            st.markdown("#### 3. Context Assembly")
+            st.caption("Step 3 • Sanitized Context")
+            st.markdown("""
+            Only authorized chunks populate the LLM system prompt context window. Zero restricted data is exposed.
+            """)
+            st.divider()
+            st.caption("Context boundary isolation")
+
+    with flow_col4:
+        with st.container(border=True):
+            st.markdown("#### 4. Audit & Verification")
+            st.caption("Step 4 • RAGLeak Monitor")
+            st.markdown("""
+            LLM synthesizes response. RAGLeak monitors completions for indirect extraction or leakage traces.
+            """)
+            st.divider()
+            st.caption("Continuous safety monitoring")
+
+    with st.container(border=True):
+        st.warning(
+            "⚠️ **The Golden Security Invariant:** Post-generation filtering alone is insufficient. "
+            "If a restricted document chunk enters the LLM prompt context window, the model can inadvertently or "
+            "adversarially disclose it via prompt injection, jailbreaks, or latent inference. "
+            "Access control must be strictly enforced **before** chunks enter the model context."
+        )
+
+    st.markdown("")
+
+    # 5. Active Policy & Document Inventory (Live Data Empty State)
+    st.subheader("📂 Active Policy & Document Inventory")
+    st.caption("Real-time telemetry and metadata loaded from the active RAG backend.")
+
+    inv_col1, inv_col2 = st.columns(2)
+
+    with inv_col1:
+        with st.container(border=True):
+            st.markdown("#### Registered Knowledge Bases")
+            st.caption("Connected vector databases and document stores.")
+            st.code("NO STORES CONNECTED", language=None)
+            st.markdown("— **Total Indexed Documents:** `—`")
+            st.markdown("— **ACL Tags Registered:** `0`")
+            st.markdown("— **Classification Coverage:** `Unevaluated`")
+            st.divider()
+            st.info("Attach knowledge base backend to inspect real document chunks and classification labels.")
+
+    with inv_col2:
+        with st.container(border=True):
+            st.markdown("#### Evaluated User Personas")
+            st.caption("Active tenant accounts and simulated audit roles.")
+            st.code("NO PERSONAS LOADED", language=None)
+            st.markdown("— **Active Roles:** `—`")
+            st.markdown("— **Tenant Boundary Tests:** `0 Configured`")
+            st.markdown("— **Policy Violations Flagged:** `—`")
+            st.divider()
+            st.info("Connect evaluation test suite to load simulated personas for cross-tenant boundary probing.")
 
 elif nav_selection == "Attack Tests":
     st.title("Adversarial Attack Tests")
