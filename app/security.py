@@ -210,16 +210,22 @@ def resolve_user_context(user_id: Optional[str]) -> Optional[UserContext]:
 
 def evaluate_document_access(
     user: Optional[UserContext],
-    doc_id: str,
-    access_level: AccessLevel,
+    doc: Any = None,
+    access_level: Optional[AccessLevel] = None,
+    doc_id: Optional[str] = None,
 ) -> Tuple[AuthDecision, str]:
     """
     Evaluate if a user is authorized to access a given document.
 
+    Supports multiple call styles:
+    - evaluate_document_access(user, doc): doc can be KnowledgeDocument or SearchResult.
+    - evaluate_document_access(user, doc_id, access_level): positional arguments.
+    - evaluate_document_access(user=user, doc_id="DOC-001", access_level=AccessLevel.PUBLIC): keyword arguments.
+
     Evaluates:
     1. Identity validity (fail-closed: unauthenticated / missing user -> DENY).
-    2. Document-specific ACLs (explicit user list and role restrictions take precedence).
-    3. Clearance tier requirement (user clearance must satisfy required level).
+    2. Baseline clearance tier vs. document requirement.
+    3. Document-specific ACLs (explicit user/role sets take precedence).
 
     Returns:
         (AuthDecision.ALLOW | AuthDecision.DENY, policy_reason)
@@ -230,18 +236,37 @@ def evaluate_document_access(
             "Deny: Unauthenticated or unknown identity (fail-closed default).",
         )
 
-    acl = DOCUMENT_ACLS.get(doc_id)
+    # Resolve target document identifier and clearance level polymorphically
+    target = doc if doc is not None else doc_id
+    if target is None:
+        return (
+            AuthDecision.DENY,
+            "Deny: Missing document reference (fail-closed default).",
+        )
+
+    if isinstance(target, str):
+        target_id = target
+        lvl = access_level if access_level is not None else AccessLevel.CONFIDENTIAL
+    else:
+        target_id = getattr(target, "doc_id", str(target))
+        lvl = (
+            access_level
+            if access_level is not None
+            else getattr(target, "clearance", getattr(target, "access_level", AccessLevel.CONFIDENTIAL))
+        )
+
+    acl = DOCUMENT_ACLS.get(target_id)
     # ACL min_clearance if explicitly set, else base tier clearance
     required_clearance = (
         acl.min_clearance
         if (acl and acl.min_clearance is not None)
-        else ACCESS_LEVEL_MIN_CLEARANCE.get(access_level, 3)
+        else ACCESS_LEVEL_MIN_CLEARANCE.get(lvl, 3)
     )
 
     if user.clearance < required_clearance:
         return (
             AuthDecision.DENY,
-            f"Deny: Insufficient clearance. Document requires {access_level.value} "
+            f"Deny: Insufficient clearance. Document requires {lvl.value} "
             f"(clearance {required_clearance}), but user '{user.user_id}' has clearance {user.clearance}.",
         )
 
@@ -265,7 +290,7 @@ def evaluate_document_access(
 
     return (
         AuthDecision.ALLOW,
-        f"Allow: User '{user.user_id}' meets {access_level.value} clearance requirement and ACL checks.",
+        f"Allow: User '{user.user_id}' meets {lvl.value} clearance requirement and ACL checks.",
     )
 
 
