@@ -78,6 +78,13 @@ ACCESS_LEVEL_MIN_CLEARANCE: Dict[AccessLevel, int] = {
 
 # Fixed server-side identity directory (simulated enterprise IAM)
 USER_DIRECTORY: Dict[str, UserContext] = {
+    "ext_guest": UserContext(
+        user_id="ext_guest",
+        name="External Guest Visitor",
+        role=UserRole.GUEST,
+        clearance=1,
+        department="External",
+    ),
     "guest_anon": UserContext(
         user_id="guest_anon",
         name="Anonymous External Guest",
@@ -106,12 +113,26 @@ USER_DIRECTORY: Dict[str, UserContext] = {
         clearance=2,
         department="Procurement",
     ),
+    "mgr_bob": UserContext(
+        user_id="mgr_bob",
+        name="Bob Martinez",
+        role=UserRole.MANAGER,
+        clearance=2,
+        department="Operations",
+    ),
     "mgr_carol": UserContext(
         user_id="mgr_carol",
         name="Carol Danvers",
         role=UserRole.MANAGER,
         clearance=2,
         department="Human Resources",
+    ),
+    "adm_charlie": UserContext(
+        user_id="adm_charlie",
+        name="Charlie Vance",
+        role=UserRole.ADMIN,
+        clearance=3,
+        department="IT Security",
     ),
     "admin_dave": UserContext(
         user_id="admin_dave",
@@ -138,9 +159,8 @@ DOCUMENT_ACLS: Dict[str, DocumentACL] = {
     "DOC-012": DocumentACL(
         doc_id="DOC-012",
         min_clearance=2,
-        # Restrictive user ACL: only Dave (admin) and Carol (HR manager) are permitted.
-        # Even another user with clearance 3 would be DENIED if not in allowed_users.
-        allowed_users={"admin_dave", "mgr_carol"},
+        # Restrictive user ACL: only designated administrators and Carol (HR manager) are permitted.
+        allowed_users={"admin_dave", "adm_charlie", "mgr_carol"},
     ),
     "DOC-013": DocumentACL(
         doc_id="DOC-013",
