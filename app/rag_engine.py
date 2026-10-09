@@ -88,6 +88,8 @@ def generate_grounded_answer(
                 "L1: $72,000-$88,000; L2: $95,000-$118,000; L3: $122,000-$148,000; L4: $150,000-$178,000; "
                 "Principal L5: $180,000-$210,000 base salary. (CONFIDENTIAL document exposed)."
             )
+        elif mode == SystemMode.PROTECTED:
+            return SAFE_NO_ACCESS_MESSAGE
         elif "DOC-003" in combined_context or "revenue" in combined_context:
             return (
                 "Based on public financial highlights (DOC-003): Aethon Labs reported $142M ARR in FY2024. "
