@@ -1,0 +1,22 @@
+# requirements.txt — Aethon Labs RAGLeak Project
+#
+# All packages below are already present in the current environment.
+# This file records the dependency contract for Step 1 and Step 2.
+# Use: pip install -r requirements.txt
+#
+# Python >= 3.12 required.
+
+# --- Core API framework ---
+fastapi>=0.136.0
+uvicorn>=0.46.0
+
+# --- Data validation ---
+pydantic>=2.13.0
+
+# --- Step 2: Search index ---
+numpy>=2.4.0
+sentence-transformers>=5.4.0
+scikit-learn>=1.8.0
+
+# --- Testing ---
+pytest>=8.0.0
