@@ -1,11 +1,17 @@
+
 # RAGLeak - AI Security Auditor
 
-import json
-import urllib.request
-import urllib.error
+import os
+import sys
+
+# Ensure project root is on sys.path for backend_client import.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from backend_client import get_audit_logs
 
 SECRET = "ORCHID-4821"
-BACKEND_AUDIT_URL = "http://127.0.0.1:8000/audit/logs"
 DEFAULT_ADMIN_ID = "adm_charlie"
 
 
@@ -19,9 +25,15 @@ def audit_answer(answer):
 
 def audit_events(events):
     """Detect documents denied by policy but still exposed."""
+    if not isinstance(events, list):
+        raise ValueError("Expected the audit API to return a list.")
+
     findings = []
 
     for event in events:
+        if not isinstance(event, dict):
+            continue
+
         if (
             event.get("decision") == "DENY"
             and event.get("content_exposed") is True
@@ -36,29 +48,32 @@ def audit_events(events):
     return findings
 
 
-def fetch_live_audit_events(admin_id=DEFAULT_ADMIN_ID, backend_url=BACKEND_AUDIT_URL):
-    """Fetch audit events from the running RAGLeak backend.
-
-    Access Control:
-    Requires Administrator identity (ADMIN clearance 3) resolved on the server
-    via X-User-Id HTTP header.
+def fetch_live_audit_events(admin_id=DEFAULT_ADMIN_ID):
     """
-    headers = {"Accept": "application/json"}
-    if admin_id:
-        headers["X-User-Id"] = admin_id
+    Fetch audit events from the running RAGLeak backend.
 
-    request = urllib.request.Request(
-        backend_url,
-        headers=headers,
-    )
+    The backend resolves the supplied identity and restricts audit-log
+    access to administrators. In this prototype, admin_id represents a
+    simulated IAM persona, not cryptographic authentication.
+    """
+    resp = get_audit_logs(admin_id=admin_id)
 
-    with urllib.request.urlopen(request, timeout=10) as response:
-        events = json.loads(response.read().decode("utf-8"))
+    if not resp.success:
+        if resp.status_code == 403:
+            raise PermissionError(
+                f"Audit access denied for '{admin_id}'. "
+                "An administrator identity is required."
+            )
 
-    if not isinstance(events, list):
+        raise ConnectionError(
+            "Backend audit request failed: "
+            f"{resp.error} (status {resp.status_code})"
+        )
+
+    if not isinstance(resp.data, list):
         raise ValueError("Expected the audit API to return a list.")
 
-    return events
+    return resp.data
 
 
 def run_sample_tests():
@@ -107,7 +122,7 @@ def run_sample_tests():
 
 
 def run_live_audit(admin_id=DEFAULT_ADMIN_ID):
-    """Check real backend logs for unauthorized exposure."""
+    """Check backend logs for unauthorized exposure."""
     print("\nLive Backend Security Audit")
 
     try:
@@ -125,16 +140,17 @@ def run_live_audit(admin_id=DEFAULT_ADMIN_ID):
 
         return findings
 
-    except urllib.error.HTTPError as error:
-        if error.code == 403:
-            print(f"Live audit access denied (HTTP 403): Unauthorized caller '{admin_id}'. Administrator identity required.")
-        else:
-            print(f"Live audit HTTP error: {error}")
+    except PermissionError as error:
+        print(f"Live audit access denied: {error}")
         return None
-    except (urllib.error.URLError, TimeoutError, ValueError,
-            json.JSONDecodeError) as error:
+
+    except (ConnectionError, TimeoutError) as error:
         print(f"Live audit unavailable: {error}")
         print("Check that the RAGLeak backend is running.")
+        return None
+
+    except ValueError as error:
+        print(f"Live audit data error: {error}")
         return None
 
 
