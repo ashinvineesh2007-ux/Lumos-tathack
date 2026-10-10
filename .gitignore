@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Pytest
+# Pytest & test artifacts
 .pytest_cache/
 .coverage
 htmlcov/
@@ -15,6 +15,7 @@ htmlcov/
 venv/
 .venv/
 env/
+.streamlit/secrets.toml
 
 # IDE & OS
 .vscode/
