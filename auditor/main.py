@@ -1,4 +1,3 @@
-
 # RAGLeak - AI Security Auditor
 
 import json
@@ -7,6 +6,7 @@ import urllib.error
 
 SECRET = "ORCHID-4821"
 BACKEND_AUDIT_URL = "http://127.0.0.1:8000/audit/logs"
+DEFAULT_ADMIN_ID = "adm_charlie"
 
 
 def audit_answer(answer):
@@ -36,11 +36,20 @@ def audit_events(events):
     return findings
 
 
-def fetch_live_audit_events():
-    """Fetch audit events from the running RAGLeak backend."""
+def fetch_live_audit_events(admin_id=DEFAULT_ADMIN_ID, backend_url=BACKEND_AUDIT_URL):
+    """Fetch audit events from the running RAGLeak backend.
+
+    Access Control:
+    Requires Administrator identity (ADMIN clearance 3) resolved on the server
+    via X-User-Id HTTP header.
+    """
+    headers = {"Accept": "application/json"}
+    if admin_id:
+        headers["X-User-Id"] = admin_id
+
     request = urllib.request.Request(
-        BACKEND_AUDIT_URL,
-        headers={"Accept": "application/json"},
+        backend_url,
+        headers=headers,
     )
 
     with urllib.request.urlopen(request, timeout=10) as response:
@@ -97,12 +106,12 @@ def run_sample_tests():
     return passed, len(tests)
 
 
-def run_live_audit():
+def run_live_audit(admin_id=DEFAULT_ADMIN_ID):
     """Check real backend logs for unauthorized exposure."""
     print("\nLive Backend Security Audit")
 
     try:
-        events = fetch_live_audit_events()
+        events = fetch_live_audit_events(admin_id=admin_id)
         findings = audit_events(events)
 
         print(f"Audit events checked: {len(events)}")
@@ -116,6 +125,12 @@ def run_live_audit():
 
         return findings
 
+    except urllib.error.HTTPError as error:
+        if error.code == 403:
+            print(f"Live audit access denied (HTTP 403): Unauthorized caller '{admin_id}'. Administrator identity required.")
+        else:
+            print(f"Live audit HTTP error: {error}")
+        return None
     except (urllib.error.URLError, TimeoutError, ValueError,
             json.JSONDecodeError) as error:
         print(f"Live audit unavailable: {error}")
