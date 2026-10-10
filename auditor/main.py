@@ -1,12 +1,17 @@
 
 # RAGLeak - AI Security Auditor
 
-import json
-import urllib.request
-import urllib.error
+import os
+import sys
+
+# Ensure project root is on sys.path for backend_client import
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from backend_client import get_audit_logs
 
 SECRET = "ORCHID-4821"
-BACKEND_AUDIT_URL = "http://127.0.0.1:8000/audit/logs"
 
 
 def audit_answer(answer):
@@ -36,20 +41,24 @@ def audit_events(events):
     return findings
 
 
-def fetch_live_audit_events():
-    """Fetch audit events from the running RAGLeak backend."""
-    request = urllib.request.Request(
-        BACKEND_AUDIT_URL,
-        headers={"Accept": "application/json"},
-    )
+def fetch_live_audit_events(admin_id: str = "adm_charlie"):
+    """
+    Fetch audit events from the running RAGLeak backend using the client contract.
+    
+    Security Architecture Note:
+    Identity resolution is handled by the server's trusted directory (USER_DIRECTORY).
+    Caller-supplied identifiers (such as admin_id / X-User-Id) represent simulated
+    IAM personas in this evaluation prototype and are not cryptographic authentication.
+    Access to /audit/logs is restricted to identities resolving to role=ADMIN.
+    """
+    resp = get_audit_logs(admin_id=admin_id)
+    if not resp.success:
+        raise ConnectionError(f"Backend audit request failed: {resp.error} (status {resp.status_code})")
 
-    with urllib.request.urlopen(request, timeout=10) as response:
-        events = json.loads(response.read().decode("utf-8"))
-
-    if not isinstance(events, list):
+    if not isinstance(resp.data, list):
         raise ValueError("Expected the audit API to return a list.")
 
-    return events
+    return resp.data
 
 
 def run_sample_tests():
@@ -116,10 +125,12 @@ def run_live_audit():
 
         return findings
 
-    except (urllib.error.URLError, TimeoutError, ValueError,
-            json.JSONDecodeError) as error:
+    except (ConnectionError, TimeoutError) as error:
         print(f"Live audit unavailable: {error}")
         print("Check that the RAGLeak backend is running.")
+        return None
+    except ValueError as error:
+        print(f"Live audit data error: {error}")
         return None
 
 
