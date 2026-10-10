@@ -1,27 +1,24 @@
-# requirements.txt — Aethon Labs RAGLeak Project
-#
-# Full dependency contract for backend, ML search index, and frontend dashboard.
-# Use: pip install -r requirements.txt
-#
+# requirements.txt — RAGLeak
 # Python >= 3.12 required.
+# Install with: pip install -r requirements.txt
 
-# --- Core API framework ---
+# Core API framework
 fastapi>=0.136.0
 uvicorn>=0.46.0
 
-# --- Data validation ---
+# Data validation
 pydantic>=2.13.0
 
-# --- Search index & ML ---
+# Search index and ML
 numpy>=2.4.0
 sentence-transformers>=5.4.0
 scikit-learn>=1.8.0
 
-# --- Frontend UI & client ---
+# Frontend dashboard and HTTP client
 streamlit==1.65.0
-pandas==3.0.6
-plotly==7.1.0
-requests==2.34.2
+pandas>=2.2.0
+requests>=2.32.0
+plotly>=7.1.0
 
-# --- Testing ---
+# Testing
 pytest>=8.0.0
